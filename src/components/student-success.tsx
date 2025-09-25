@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, ArrowLeft } from "lucide-react";
+import { CheckCircle, Home } from "lucide-react";
 
 export function StudentSuccess() {
   const [studentName, setStudentName] = useState<string>('');
@@ -29,7 +29,7 @@ export function StudentSuccess() {
         <CardContent>
           <Button asChild variant="outline">
             <Link href="/">
-                <ArrowLeft className="mr-2" />
+                <Home className="mr-2" />
                 Back to Home
             </Link>
           </Button>
