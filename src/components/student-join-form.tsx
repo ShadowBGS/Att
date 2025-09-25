@@ -19,7 +19,7 @@ import { useToast } from "@/hooks/use-toast"
 import { UserPlus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useFirestore, useAuth, useUser } from "@/firebase";
-import { doc, getDoc, collection, addDoc, serverTimestamp, query, where, getDocs } from "firebase/firestore";
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { signInAnonymously } from "firebase/auth";
 
 const FormSchema = z.object({
@@ -80,12 +80,8 @@ export function StudentJoinForm({ lecturerId, sessionId }: { lecturerId: string;
           return;
       }
 
-      const studentsRef = collection(firestore, 'users', lecturerId, 'classSessions', sessionId, 'attendanceRecords');
-      
-      // Use student UID to check for existing record
-      const studentDocRef = doc(studentsRef, student.uid);
+      const studentDocRef = doc(firestore, 'users', lecturerId, 'classSessions', sessionId, 'attendanceRecords', student.uid);
       const studentDocSnap = await getDoc(studentDocRef);
-
 
       if (studentDocSnap.exists()) {
         toast({
@@ -93,7 +89,7 @@ export function StudentJoinForm({ lecturerId, sessionId }: { lecturerId: string;
           description: "Your attendance has already been marked for this session.",
         });
       } else {
-        await addDoc(studentsRef, {
+        await setDoc(studentDocRef, {
             studentName: data.name,
             studentId: student.uid,
             timestamp: serverTimestamp()
