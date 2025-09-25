@@ -18,8 +18,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { useToast } from "@/hooks/use-toast"
 import { UserPlus } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useFirestore } from "@/firebase";
+import { useFirestore, useAuth, useUser } from "@/firebase";
 import { doc, getDoc, collection, addDoc, serverTimestamp, query, where, getDocs } from "firebase/firestore";
+import { signInAnonymously } from "firebase/auth";
 
 const FormSchema = z.object({
   name: z.string().min(2, {
@@ -30,12 +31,24 @@ const FormSchema = z.object({
 export function StudentJoinForm({ lecturerId, sessionId }: { lecturerId: string; sessionId: string }) {
   const router = useRouter()
   const firestore = useFirestore();
+  const auth = useAuth();
+  const { user: student, isUserLoading } = useUser();
   const { toast } = useToast()
   const [isClient, setIsClient] = useState(false)
 
   useEffect(() => {
     setIsClient(true)
-  }, [])
+    if (auth && !student && !isUserLoading) {
+      signInAnonymously(auth).catch((error) => {
+        console.error("Anonymous sign-in failed:", error);
+        toast({
+          title: "Authentication Failed",
+          description: "Could not log in to join the session.",
+          variant: "destructive",
+        });
+      });
+    }
+  }, [auth, student, isUserLoading, toast]);
 
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
@@ -45,7 +58,14 @@ export function StudentJoinForm({ lecturerId, sessionId }: { lecturerId: string;
   })
 
   async function onSubmit(data: z.infer<typeof FormSchema>) {
-    if (!isClient || !firestore) return
+    if (!isClient || !firestore || !student) {
+        toast({
+            title: "Error",
+            description: "Could not connect to the session. Please refresh and try again.",
+            variant: "destructive",
+        })
+        return
+    }
 
     try {
       const sessionRef = doc(firestore, 'users', lecturerId, 'classSessions', sessionId);
@@ -61,10 +81,13 @@ export function StudentJoinForm({ lecturerId, sessionId }: { lecturerId: string;
       }
 
       const studentsRef = collection(firestore, 'users', lecturerId, 'classSessions', sessionId, 'attendanceRecords');
-      const q = query(studentsRef, where("studentName", "==", data.name));
-      const querySnapshot = await getDocs(q);
+      
+      // Use student UID to check for existing record
+      const studentDocRef = doc(studentsRef, student.uid);
+      const studentDocSnap = await getDoc(studentDocRef);
 
-      if (!querySnapshot.empty) {
+
+      if (studentDocSnap.exists()) {
         toast({
           title: "Already Registered",
           description: "Your attendance has already been marked for this session.",
@@ -72,6 +95,7 @@ export function StudentJoinForm({ lecturerId, sessionId }: { lecturerId: string;
       } else {
         await addDoc(studentsRef, {
             studentName: data.name,
+            studentId: student.uid,
             timestamp: serverTimestamp()
         });
         localStorage.setItem('classconnect_student_name', data.name);
@@ -87,6 +111,14 @@ export function StudentJoinForm({ lecturerId, sessionId }: { lecturerId: string;
         variant: "destructive",
       })
     }
+  }
+  
+  if (isUserLoading || !isClient) {
+    return (
+        <div className="flex flex-1 items-center justify-center w-full">
+            <p>Loading session...</p>
+        </div>
+    )
   }
 
   return (
@@ -112,7 +144,7 @@ export function StudentJoinForm({ lecturerId, sessionId }: { lecturerId: string;
                                 </FormItem>
                             )}
                         />
-                        <Button type="submit" className="w-full bg-accent text-accent-foreground hover:bg-accent/90" size="lg">
+                        <Button type="submit" className="w-full bg-accent text-accent-foreground hover:bg-accent/90" size="lg" disabled={!student}>
                             <UserPlus className="mr-2" /> Mark My Attendance
                         </Button>
                     </form>
@@ -122,5 +154,3 @@ export function StudentJoinForm({ lecturerId, sessionId }: { lecturerId: string;
     </div>
   )
 }
-
-    
