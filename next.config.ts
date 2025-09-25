@@ -28,6 +28,17 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'api.qrserver.com',
+        port: '',
+        pathname: '/**',
+      }
+    ],
+  },
+  experimental: {
+    allowedDevOrigins: [
+      'https://6000-firebase-studio-1758756839380.cluster-fbfjltn375c6wqxlhoehbz44sk.cloudworkstations.dev',
     ],
   },
 };
