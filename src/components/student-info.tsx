@@ -83,7 +83,9 @@ export function StudentInfo() {
     }
 
     return () => {
-      cancelAnimationFrame(animationFrameId);
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
     };
   }, [hasCameraPermission, router]);
 
@@ -114,3 +116,5 @@ export function StudentInfo() {
     </>
   );
 }
+
+    

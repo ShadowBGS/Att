@@ -27,7 +27,7 @@ const FormSchema = z.object({
   }),
 })
 
-export function StudentJoinForm({ sessionId }: { sessionId: string }) {
+export function StudentJoinForm({ lecturerId, sessionId }: { lecturerId: string; sessionId: string }) {
   const router = useRouter()
   const firestore = useFirestore();
   const { toast } = useToast()
@@ -48,7 +48,7 @@ export function StudentJoinForm({ sessionId }: { sessionId: string }) {
     if (!isClient || !firestore) return
 
     try {
-      const sessionRef = doc(firestore, 'sessions', sessionId);
+      const sessionRef = doc(firestore, 'users', lecturerId, 'classSessions', sessionId);
       const sessionSnap = await getDoc(sessionRef);
 
       if (!sessionSnap.exists()) {
@@ -60,8 +60,8 @@ export function StudentJoinForm({ sessionId }: { sessionId: string }) {
           return;
       }
 
-      const studentsRef = collection(firestore, 'sessions', sessionId, 'students');
-      const q = query(studentsRef, where("name", "==", data.name));
+      const studentsRef = collection(firestore, 'users', lecturerId, 'classSessions', sessionId, 'attendanceRecords');
+      const q = query(studentsRef, where("studentName", "==", data.name));
       const querySnapshot = await getDocs(q);
 
       if (!querySnapshot.empty) {
@@ -71,13 +71,13 @@ export function StudentJoinForm({ sessionId }: { sessionId: string }) {
         });
       } else {
         await addDoc(studentsRef, {
-            name: data.name,
-            joinTime: serverTimestamp()
+            studentName: data.name,
+            timestamp: serverTimestamp()
         });
         localStorage.setItem('classconnect_student_name', data.name);
       }
 
-      router.push(`/join/${sessionId}/success`);
+      router.push(`/join/${lecturerId}/${sessionId}/success`);
 
     } catch (error) {
       console.error("Failed to update attendance:", error);
@@ -122,3 +122,5 @@ export function StudentJoinForm({ sessionId }: { sessionId: string }) {
     </div>
   )
 }
+
+    

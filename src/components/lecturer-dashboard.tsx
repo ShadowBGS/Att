@@ -7,10 +7,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Users, QrCode, PlayCircle, StopCircle, UserCheck, BarChart, Clock, GraduationCap } from 'lucide-react';
 import { doc, setDoc, serverTimestamp, collection, onSnapshot, deleteDoc, query, orderBy } from 'firebase/firestore';
-import { useFirestore } from '@/firebase';
+import { useFirestore, useAuth, useUser } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
+import { signInAnonymously } from 'firebase/auth';
 
-const SESSION_KEY = 'classconnect_session_id';
+const SESSION_KEY_PREFIX = 'classconnect_session_id_';
 
 interface Student {
   id: string;
@@ -20,6 +21,8 @@ interface Student {
 
 export function LecturerDashboard() {
   const firestore = useFirestore();
+  const auth = useAuth();
+  const { user: lecturer, isUserLoading } = useUser();
   const { toast } = useToast();
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [students, setStudents] = useState<Student[]>([]);
@@ -30,19 +33,35 @@ export function LecturerDashboard() {
 
   useEffect(() => {
     setIsClient(true);
-    const storedSessionId = localStorage.getItem(SESSION_KEY);
-    if (storedSessionId) {
-      setSessionId(storedSessionId);
+    if (auth && !lecturer && !isUserLoading) {
+      signInAnonymously(auth).catch((error) => {
+        console.error("Anonymous sign-in failed:", error);
+        toast({
+          title: "Authentication Failed",
+          description: "Could not log in anonymously. Please refresh the page.",
+          variant: "destructive",
+        });
+      });
     }
-  }, []);
+  }, [auth, lecturer, isUserLoading, toast]);
 
   useEffect(() => {
-    if (!sessionId || !firestore) {
+    if (lecturer) {
+      const storedSessionId = localStorage.getItem(SESSION_KEY_PREFIX + lecturer.uid);
+      if (storedSessionId) {
+        setSessionId(storedSessionId);
+      }
+    }
+  }, [lecturer]);
+
+  useEffect(() => {
+    if (!sessionId || !firestore || !lecturer) {
       setSessionStartTime(null);
+      setStudents([]);
       return;
     }
 
-    const sessionRef = doc(firestore, 'sessions', sessionId);
+    const sessionRef = doc(firestore, 'users', lecturer.uid, 'classSessions', sessionId);
     const unsubscribeSession = onSnapshot(sessionRef, (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
@@ -51,19 +70,21 @@ export function LecturerDashboard() {
         }
       } else {
         setSessionId(null);
-        localStorage.removeItem(SESSION_KEY);
+        if (lecturer) {
+          localStorage.removeItem(SESSION_KEY_PREFIX + lecturer.uid);
+        }
       }
     });
 
-    const studentsQuery = query(collection(firestore, 'sessions', sessionId, 'students'), orderBy('joinTime', 'asc'));
+    const studentsQuery = query(collection(firestore, 'users', lecturer.uid, 'classSessions', sessionId, 'attendanceRecords'), orderBy('timestamp', 'asc'));
     const unsubscribeStudents = onSnapshot(studentsQuery, (querySnapshot) => {
         const studentList: Student[] = [];
         querySnapshot.forEach((doc) => {
             const data = doc.data();
             studentList.push({
                 id: doc.id,
-                name: data.name,
-                joinTime: data.joinTime?.toDate() || new Date(),
+                name: data.studentName,
+                joinTime: data.timestamp?.toDate() || new Date(),
             });
         });
         setStudents(studentList);
@@ -73,16 +94,16 @@ export function LecturerDashboard() {
       unsubscribeSession();
       unsubscribeStudents();
     };
-  }, [sessionId, firestore]);
+  }, [sessionId, firestore, lecturer]);
   
   useEffect(() => {
-    if (isClient && sessionId) {
-      const joinUrl = `${window.location.origin}/join/${sessionId}`;
+    if (isClient && sessionId && lecturer) {
+      const joinUrl = `${window.location.origin}/join/${lecturer.uid}/${sessionId}`;
       setQrCodeUrl(`https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(joinUrl)}&size=256x256&bgcolor=f0f0f0`);
     } else {
       setQrCodeUrl('');
     }
-  }, [sessionId, isClient]);
+  }, [sessionId, isClient, lecturer]);
 
   useEffect(() => {
     if (!sessionStartTime) {
@@ -98,23 +119,23 @@ export function LecturerDashboard() {
 
 
   const startClass = async () => {
-    if (!firestore) {
+    if (!firestore || !lecturer) {
       toast({
         title: "Error",
-        description: "Could not connect to the database. Please try again.",
+        description: "Not authenticated or database connection failed. Please try again.",
         variant: "destructive"
       });
       return;
     }
-    const newSessionId = doc(collection(firestore, 'sessions')).id;
-    const sessionRef = doc(firestore, 'sessions', newSessionId);
+    const newSessionRef = doc(collection(firestore, 'users', lecturer.uid, 'classSessions'));
+    const newSessionId = newSessionRef.id;
     
     try {
-      await setDoc(sessionRef, {
+      await setDoc(newSessionRef, {
         startTime: serverTimestamp(),
         active: true,
       });
-      localStorage.setItem(SESSION_KEY, newSessionId);
+      localStorage.setItem(SESSION_KEY_PREFIX + lecturer.uid, newSessionId);
       setSessionId(newSessionId);
     } catch (error) {
       console.error("Error starting class:", error);
@@ -127,9 +148,9 @@ export function LecturerDashboard() {
   };
 
   const endClass = async () => {
-    if (sessionId && firestore) {
+    if (sessionId && firestore && lecturer) {
       try {
-        const sessionRef = doc(firestore, 'sessions', sessionId);
+        const sessionRef = doc(firestore, 'users', lecturer.uid, 'classSessions', sessionId);
         await deleteDoc(sessionRef); 
       } catch (error) {
          console.error("Error ending class:", error);
@@ -140,7 +161,9 @@ export function LecturerDashboard() {
         });
       }
     }
-    localStorage.removeItem(SESSION_KEY);
+    if (lecturer) {
+        localStorage.removeItem(SESSION_KEY_PREFIX + lecturer.uid);
+    }
     setSessionId(null);
     setStudents([]);
     setSessionStartTime(null);
@@ -152,8 +175,12 @@ export function LecturerDashboard() {
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  if (!isClient) {
-    return null; 
+  if (!isClient || isUserLoading) {
+    return (
+        <div className="flex items-center justify-center flex-1">
+            <p>Loading...</p>
+        </div>
+    );
   }
 
   return (
@@ -165,7 +192,7 @@ export function LecturerDashboard() {
               <h1 className="text-3xl font-bold font-headline">Lecturer Dashboard</h1>
               <p className="text-muted-foreground">Welcome! Start a new session to begin taking attendance.</p>
             </div>
-            <Button size="lg" className="w-full sm:w-auto bg-accent text-accent-foreground hover:bg-accent/90" onClick={startClass}>
+            <Button size="lg" className="w-full sm:w-auto bg-accent text-accent-foreground hover:bg-accent/90" onClick={startClass} disabled={!lecturer}>
               <PlayCircle className="mr-2" /> Start Class Session
             </Button>
           </div>
@@ -283,3 +310,5 @@ export function LecturerDashboard() {
     </>
   );
 }
+
+    
