@@ -1,4 +1,5 @@
 import { StudentInfo } from '@/components/student-info';
+import { Card, CardHeader } from '@/components/ui/card';
 
 export default function StudentPage() {
   return (
