@@ -1,146 +1,67 @@
-"use client";
-
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Loader2, Wifi, WifiOff } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
-import { StudentInfo } from './student-info';
-
-type Step = 'proximity_check' | 'qr_scan';
-
-const BLUETOOTH_SERVICE_UUID = '0000180a-0000-1000-8000-00805f9b34fb';
-
-export function StudentScanSteps() {
-  const [step, setStep] = useState<Step>('proximity_check');
-  const [nearbySession, setNearbySession] = useState<string | null>(null);
-  const [isScanning, setIsScanning] = useState(false);
-  const { toast } = useToast();
-  const scanController = useRef<AbortController | null>(null);
-
-  const stopScan = useCallback(() => {
-    if (scanController.current) {
-      scanController.current.abort();
-      scanController.current = null;
-    }
-    setIsScanning(false);
-  }, []);
-
-  const startScan = useCallback(async () => {
-    if (!navigator.bluetooth) {
-      toast({
-        variant: 'destructive',
-        title: 'Bluetooth Not Supported',
-        description: 'Your browser does not support Web Bluetooth. Proximity check is unavailable.',
-      });
-      return;
-    }
-
-    const isBluetoothEnabled = await navigator.bluetooth.getAvailability();
-    if (!isBluetoothEnabled) {
-      toast({
-        variant: 'destructive',
-        title: 'Bluetooth is turned off',
-        description: 'Please turn on Bluetooth to find nearby classes.',
-      });
-      return;
-    }
-
-    if (isScanning) return;
-
-    setIsScanning(true);
-    setNearbySession(null);
-
-    try {
-      scanController.current = new AbortController();
-
-      const device = await navigator.bluetooth.requestDevice({
-        filters: [{ services: [BLUETOOTH_SERVICE_UUID] }],
-        optionalServices: [BLUETOOTH_SERVICE_UUID],
-      });
-
-      const deviceName = device.name || '';
-      if (deviceName.startsWith('ClassConnect:')) {
-        const sessionId = deviceName.split(':')[1];
-        setNearbySession(sessionId);
-        toast({
-          title: 'Class Found!',
-          description: 'A nearby class session has been detected. You can now proceed.',
-        });
-      } else {
-         setNearbySession(null);
-      }
-    } catch (error: any) {
-      if (error.name !== 'NotFoundError' && error.name !== 'AbortError') {
-        console.error('Bluetooth scan error:', error);
-        toast({
-          variant: 'destructive',
-          title: 'Scan Error',
-          description: 'Could not scan for devices. Make sure you grant the required permissions.',
-        });
-      }
-    } finally {
-      setIsScanning(false);
-    }
-  }, [toast, isScanning]);
-
-  useEffect(() => {
-    // Cleanup on unmount
-    return () => {
-      stopScan();
-    };
-  }, [stopScan]);
-
-  return (
-    <div className="flex flex-1 items-center justify-center w-full">
-      <Card className="w-full max-w-md shadow-lg text-center">
-        <CardHeader>
-          {step === 'proximity_check' && (
-            <>
-              <div className="mx-auto bg-primary rounded-full h-20 w-20 flex items-center justify-center mb-4">
-                <Wifi className="h-12 w-12 text-primary-foreground" />
-              </div>
-              <CardTitle className="text-3xl font-headline">Find Nearby Class</CardTitle>
-              <CardDescription>
-                Scan for your lecturer's signal to ensure you're in the classroom.
-              </CardDescription>
-            </>
-          )}
-        </CardHeader>
-        <CardContent className="p-4">
-          {step === 'proximity_check' ? (
-            <div className="flex flex-col items-center gap-4">
-              <Button onClick={startScan} disabled={isScanning} size="lg" className="w-full">
-                {isScanning ? (
-                  <>
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                    Scanning...
-                  </>
-                ) : (
-                  'Scan for Class'
-                )}
-              </Button>
-              {nearbySession ? (
-                 <div className="text-center p-4 bg-green-100 dark:bg-green-900/50 rounded-lg w-full">
-                    <p className="font-bold text-green-700 dark:text-green-300">Class Found!</p>
-                    <p className="text-sm text-muted-foreground">You can now proceed to scan the QR code.</p>
-                     <Button onClick={() => setStep('qr_scan')} className="mt-4">
-                        Proceed to QR Scan
-                    </Button>
-                </div>
-              ) : (
-                <div className="text-center p-4 bg-secondary rounded-lg w-full">
-                    <WifiOff className="h-8 w-8 mx-auto text-muted-foreground mb-2"/>
-                    <p className="font-bold">No Class Found</p>
-                    <p className="text-sm text-muted-foreground">Please try scanning. Ensure your lecturer has started the session.</p>
-                </div>
-              )}
-            </div>
-          ) : (
-            <StudentInfo />
-          )}
-        </CardContent>
-      </Card>
-    </div>
-  );
+{
+  "name": "nextn",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack -p 9002",
+    "genkit:dev": "genkit start -- tsx src/ai/dev.ts",
+    "genkit:watch": "genkit start -- tsx --watch src/ai/dev.ts",
+    "build": "NODE_ENV=production next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@genkit-ai/googleai": "^1.14.1",
+    "@genkit-ai/next": "^1.14.1",
+    "@hookform/resolvers": "^4.1.3",
+    "@radix-ui/react-accordion": "^1.2.3",
+    "@radix-ui/react-alert-dialog": "^1.1.6",
+    "@radix-ui/react-avatar": "^1.1.3",
+    "@radix-ui/react-checkbox": "^1.1.4",
+    "@radix-ui/react-collapsible": "^1.1.11",
+    "@radix-ui/react-dialog": "^1.1.6",
+    "@radix-ui/react-dropdown-menu": "^2.1.6",
+    "@radix-ui/react-label": "^2.1.2",
+    "@radix-ui/react-menubar": "^1.1.6",
+    "@radix-ui/react-popover": "^1.1.6",
+    "@radix-ui/react-progress": "^1.1.2",
+    "@radix-ui/react-radio-group": "^1.2.3",
+    "@radix-ui/react-scroll-area": "^1.2.3",
+    "@radix-ui/react-select": "^2.1.6",
+    "@radix-ui/react-separator": "^1.1.2",
+    "@radix-ui/react-slider": "^1.2.3",
+    "@radix-ui/react-slot": "^1.2.3",
+    "@radix-ui/react-switch": "^1.1.3",
+    "@radix-ui/react-tabs": "^1.1.3",
+    "@radix-ui/react-toast": "^1.2.6",
+    "@radix-ui/react-tooltip": "^1.1.8",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "date-fns": "^3.6.0",
+    "dotenv": "^16.5.0",
+    "embla-carousel-react": "^8.6.0",
+    "firebase": "^11.9.1",
+    "genkit": "^1.14.1",
+    "jsqr": "^1.4.0",
+    "lucide-react": "^0.475.0",
+    "next": "15.3.3",
+    "react": "^18.3.1",
+    "react-day-picker": "^8.10.1",
+    "react-dom": "^18.3.1",
+    "react-hook-form": "^7.54.2",
+    "recharts": "^2.15.1",
+    "tailwind-merge": "^3.0.1",
+    "tailwindcss-animate": "^1.0.7",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "genkit-cli": "^1.14.1",
+    "postcss": "^8",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5"
+  }
 }
