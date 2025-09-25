@@ -1,0 +1,14 @@
+diff --git a/node_modules/@types/web-bluetooth/index.d.ts b/node_modules/@types/web-bluetooth/index.d.ts
+index 0e964f5..65564f9 100644
+--- a/node_modules/@types/web-bluetooth/index.d.ts
++++ b/node_modules/@types/web-bluetooth/index.d.ts
+@@ -82,6 +82,7 @@ interface Navigator {
+      * bluetooth attribute is getting removed. This is the new attribute.
+      * See: https://github.com/WebBluetoothCG/web-bluetooth/issues/525
+      */
+-    readonly bluetooth: Bluetooth;
++    // TS-TODO: Method `requestDevice` is not implemented in some browsers.
++    readonly bluetooth: any;
+ }
+ 
+ interface BluetoothDeviceEventHandlers {

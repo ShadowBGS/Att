@@ -1,19 +1,24 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Users, QrCode, PlayCircle, StopCircle, UserCheck } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 const SESSION_KEY = 'classconnect_session_id';
+const BLUETOOTH_SERVICE_UUID = '0000180a-0000-1000-8000-00805f9b34fb'; // Device Information Service UUID
 
 export function LecturerDashboard() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [students, setStudents] = useState<string[]>([]);
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
   const [isClient, setIsClient] = useState(false);
+  const { toast } = useToast();
+  const advertisementRef = useRef<any>(null);
+
 
   useEffect(() => {
     setIsClient(true);
@@ -36,13 +41,66 @@ export function LecturerDashboard() {
     }
   }, []);
 
+  const stopBroadcasting = useCallback(async () => {
+    if (advertisementRef.current) {
+        try {
+            await advertisementRef.current.stop();
+            advertisementRef.current = null;
+            console.log('Bluetooth advertisement stopped.');
+        } catch (error) {
+            console.error('Error stopping Bluetooth advertisement:', error);
+        }
+    }
+  }, []);
+
+  const startBroadcasting = useCallback(async (currentSessionId: string) => {
+    if (!navigator.bluetooth || !('advertise' in navigator.bluetooth)) {
+        toast({
+            variant: 'destructive',
+            title: 'Bluetooth Not Supported',
+            description: 'This browser does not support broadcasting. Students may not be able to find your class automatically.',
+        });
+        return;
+    }
+
+    await stopBroadcasting(); // Stop any previous advertisement
+
+    try {
+      const controller = new AbortController();
+      const advertisement = await (navigator.bluetooth as any).advertise({
+        services: [BLUETOOTH_SERVICE_UUID],
+        name: `ClassConnect:${currentSessionId}`,
+        signal: controller.signal,
+      });
+
+      advertisementRef.current = {
+        stop: () => {
+          controller.abort();
+          console.log('Stopping advertisement via abort controller.');
+        },
+      };
+
+      console.log('Started Bluetooth advertisement for session:', currentSessionId);
+    } catch (error) {
+        console.error('Failed to start Bluetooth advertisement:', error);
+        toast({
+            variant: 'destructive',
+            title: 'Broadcast Error',
+            description: 'Could not start Bluetooth broadcast. Please ensure Bluetooth is enabled and permissions are granted.',
+        });
+    }
+}, [toast, stopBroadcasting]);
+
+
   useEffect(() => {
     if (isClient && sessionId) {
       const joinUrl = `${window.location.origin}/join/${sessionId}`;
       setQrCodeUrl(`https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(joinUrl)}&size=256x256&bgcolor=f0f0f0`);
       updateStudentList(sessionId);
+      startBroadcasting(sessionId);
     } else {
       setQrCodeUrl('');
+      stopBroadcasting();
     }
 
     const handleStorageChange = (event: StorageEvent) => {
@@ -58,7 +116,14 @@ export function LecturerDashboard() {
     return () => {
       window.removeEventListener('storage', handleStorageChange);
     };
-  }, [sessionId, isClient, updateStudentList]);
+  }, [sessionId, isClient, updateStudentList, startBroadcasting, stopBroadcasting]);
+
+  useEffect(() => {
+    return () => {
+      // Cleanup on component unmount
+      stopBroadcasting();
+    };
+  }, [stopBroadcasting]);
 
 
   const startClass = () => {
@@ -69,6 +134,7 @@ export function LecturerDashboard() {
   };
 
   const endClass = () => {
+    stopBroadcasting();
     localStorage.removeItem(`students-${sessionId}`);
     localStorage.removeItem(SESSION_KEY);
     setSessionId(null);

@@ -4,8 +4,8 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import jsQR from 'jsqr';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { QrCode, VideoOff } from "lucide-react";
+import { Button } from '@/components/ui/button';
+import { QrCode, VideoOff, ArrowRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export function StudentInfo() {
@@ -88,35 +88,29 @@ export function StudentInfo() {
   }, [hasCameraPermission, router]);
 
   return (
-    <div className="flex flex-1 items-center justify-center w-full">
-      <Card className="w-full max-w-md shadow-lg text-center">
-        <CardHeader>
-          <div className="mx-auto bg-accent rounded-full h-20 w-20 flex items-center justify-center mb-4">
-            <QrCode className="h-12 w-12 text-accent-foreground" />
-          </div>
-          <CardTitle className="text-3xl font-headline">Scan to Join</CardTitle>
-          <CardDescription>Point your camera at the QR code provided by your lecturer to mark your attendance.</CardDescription>
-        </CardHeader>
-        <CardContent className="p-4">
-          <div className="relative aspect-video w-full bg-secondary rounded-lg overflow-hidden border">
-            <video ref={videoRef} className="w-full h-full object-cover" autoPlay playsInline muted />
-            <canvas ref={canvasRef} className="hidden" />
+    <>
+        <div className="mx-auto bg-accent rounded-full h-20 w-20 flex items-center justify-center mb-4">
+        <QrCode className="h-12 w-12 text-accent-foreground" />
+        </div>
+        <CardTitle className="text-3xl font-headline">Scan to Join</CardTitle>
+        <CardDescription>Point your camera at the QR code provided by your lecturer to mark your attendance.</CardDescription>
+        <div className="relative aspect-video w-full bg-secondary rounded-lg overflow-hidden border mt-4">
+        <video ref={videoRef} className="w-full h-full object-cover" autoPlay playsInline muted />
+        <canvas ref={canvasRef} className="hidden" />
 
-            {hasCameraPermission === false && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 text-white p-4">
-                <VideoOff className="h-12 w-12 mb-4" />
-                <p className="font-bold">Camera Access Denied</p>
-                <p className="text-sm">Please enable camera permissions.</p>
-              </div>
-            )}
-             {hasCameraPermission === null && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 text-white p-4">
+        {hasCameraPermission === false && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 text-white p-4">
+            <VideoOff className="h-12 w-12 mb-4" />
+            <p className="font-bold">Camera Access Denied</p>
+            <p className="text-sm">Please enable camera permissions.</p>
+            </div>
+        )}
+            {hasCameraPermission === null && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 text-white p-4">
                 <p>Requesting camera access...</p>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+            </div>
+        )}
+        </div>
+    </>
   );
 }

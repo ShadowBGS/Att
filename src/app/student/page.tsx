@@ -1,5 +1,5 @@
-import { StudentInfo } from '@/components/student-info';
+import { StudentScanSteps } from '@/components/student-scan-steps';
 
 export default function StudentPage() {
-  return <StudentInfo />;
+  return <StudentScanSteps />;
 }
