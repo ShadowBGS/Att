@@ -5,8 +5,7 @@ import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Users, QrCode, PlayCircle, StopCircle, UserCheck, BarChart, Clock } from 'lucide-react';
-import { Separator } from '@/components/ui/separator';
+import { Users, QrCode, PlayCircle, StopCircle, UserCheck, BarChart, Clock, GraduationCap } from 'lucide-react';
 
 const SESSION_KEY = 'classconnect_session_id';
 
@@ -21,8 +20,8 @@ export function LecturerDashboard() {
   useEffect(() => {
     setIsClient(true);
     const storedSessionId = localStorage.getItem(SESSION_KEY);
-    const storedStartTime = localStorage.getItem(`session_start_time_${storedSessionId}`);
     if (storedSessionId) {
+      const storedStartTime = localStorage.getItem(`session_start_time_${storedSessionId}`);
       setSessionId(storedSessionId);
       if (storedStartTime) {
         setSessionStartTime(new Date(storedStartTime));
@@ -44,7 +43,7 @@ export function LecturerDashboard() {
 
 
   const updateStudentList = useCallback((id: string | null) => {
-    if (!id) {
+    if (!id || !isClient) {
       setStudents([]);
       return;
     }
@@ -54,7 +53,7 @@ export function LecturerDashboard() {
     } else {
       setStudents([]);
     }
-  }, []);
+  }, [isClient]);
 
   useEffect(() => {
     if (isClient && sessionId) {
@@ -71,12 +70,18 @@ export function LecturerDashboard() {
       }
       if (event.key === SESSION_KEY && !event.newValue) {
         setSessionId(null);
+        setSessionStartTime(null);
+        setStudents([]);
       }
     };
-
-    window.addEventListener('storage', handleStorageChange);
+    
+    if (isClient) {
+      window.addEventListener('storage', handleStorageChange);
+    }
     return () => {
-      window.removeEventListener('storage', handleStorageChange);
+      if (isClient) {
+        window.removeEventListener('storage', handleStorageChange);
+      }
     };
   }, [sessionId, isClient, updateStudentList]);
 
@@ -113,18 +118,30 @@ export function LecturerDashboard() {
 
   if (!sessionId) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center text-center p-4">
-        <Card className="w-full max-w-md shadow-lg">
-          <CardHeader>
-            <CardTitle className="text-3xl font-headline">Welcome, Lecturer!</CardTitle>
-            <CardDescription>Start a new class session to begin taking attendance.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button size="lg" className="w-full bg-accent text-accent-foreground hover:bg-accent/90" onClick={startClass}>
-              <PlayCircle className="mr-2" /> Start Class Session
-            </Button>
-          </CardContent>
-        </Card>
+      <div className="space-y-8">
+        <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+          <div>
+            <h1 className="text-3xl font-bold font-headline">Lecturer Dashboard</h1>
+            <p className="text-muted-foreground">Welcome! Start a new session to begin taking attendance.</p>
+          </div>
+          <Button size="lg" className="w-full sm:w-auto bg-accent text-accent-foreground hover:bg-accent/90" onClick={startClass}>
+            <PlayCircle className="mr-2" /> Start Class Session
+          </Button>
+        </div>
+        <div className="flex flex-1 items-center justify-center text-center p-4">
+          <Card className="w-full max-w-2xl shadow-lg">
+            <CardHeader>
+              <div className="mx-auto bg-primary rounded-full h-20 w-20 flex items-center justify-center mb-4">
+                <GraduationCap className="h-12 w-12 text-primary-foreground" />
+              </div>
+              <CardTitle className="text-3xl font-headline">Ready to start your class?</CardTitle>
+              <CardDescription className="text-lg">Click the "Start Class Session" button to generate a QR code and begin tracking attendance in real-time.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground">Once a session is active, you will see the session details, QR code, and a live list of attendees here.</p>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     );
   }
@@ -141,7 +158,7 @@ export function LecturerDashboard() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <Card className="shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Attendees</CardTitle>
@@ -226,5 +243,3 @@ export function LecturerDashboard() {
     </div>
   );
 }
-
-    
