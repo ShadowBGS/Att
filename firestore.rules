@@ -1,16 +1,127 @@
+/**
+ * @fileoverview Firestore Security Rules for ClassConnect application.
+ *
+ * Core Philosophy:
+ * This ruleset enforces a strict user-ownership model. Lecturers can only
+ * access data they own. Students can only access their own data.
+ *
+ * Data Structure:
+ * - /users/{lecturerId}: Stores lecturer profiles.
+ * - /users/{lecturerId}/classSessions/{classSessionId}: Stores class sessions owned by a lecturer.
+ * - /users/{lecturerId}/classSessions/{classSessionId}/attendanceRecords/{attendanceRecordId}: Stores attendance records for class sessions.
+ * - /students/{studentId}: Stores student profiles.
+ *
+ * Key Security Decisions:
+ * - Lecturers can only create, read, update, and delete their own class sessions and attendance records.
+ * - Students can only access their own student profile.
+ * - Listing all users (lecturers or students) is disallowed for security.
+ *
+ * Denormalization for Authorization:
+ * - The `lecturerId` is implicitly denormalized in the path for class sessions and attendance records.
+ *   This allows security rules to avoid costly `get()` calls to check ownership.
+ */
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /sessions/{sessionId} {
-      allow read: if true;
-      allow write: if true; // In a real app, you'd restrict this to lecturers
-      
-      match /students/{studentId} {
-        allow read: if true;
-        allow create: if true; // Allow students to add themselves
-        allow update, delete: if false; // Students cannot modify/delete attendance
-      }
+
+    /**
+     * @description Lecturer profiles. Only the lecturer can create their profile.
+     * @path /users/{lecturerId}
+     * @allow (create) - A lecturer with UID 'lecturer123' can create their profile at /users/lecturer123 if request.auth.uid == 'lecturer123'.
+     * @deny (create) - A lecturer with UID 'lecturer123' cannot create a profile at /users/anotherLecturer if request.auth.uid != 'anotherLecturer'.
+     * @allow (get) - A lecturer with UID 'lecturer123' can get their profile at /users/lecturer123.
+     * @deny (get) - A lecturer with UID 'lecturer123' cannot get the profile at /users/anotherLecturer.
+     * @allow (update) - A lecturer with UID 'lecturer123' can update their profile at /users/lecturer123.
+     * @deny (update) - A lecturer with UID 'lecturer123' cannot update the profile at /users/anotherLecturer.
+     * @allow (delete) - A lecturer with UID 'lecturer123' can delete their profile at /users/lecturer123.
+     * @deny (delete) - A lecturer with UID 'lecturer123' cannot delete the profile at /users/anotherLecturer.
+     * @allow (list) - Listing is disallowed.
+     * @principle Enforces document ownership and prevents unauthorized data access.
+     */
+    match /users/{lecturerId} {
+      allow create: if isSignedIn() && isOwner(lecturerId) && request.auth.uid == lecturerId;
+      allow get: if isSignedIn() && isOwner(lecturerId);
+      allow update: if isSignedIn() && isExistingOwner(lecturerId);
+      allow delete: if isSignedIn() && isExistingOwner(lecturerId);
+      allow list: if false;
+    }
+
+    /**
+     * @description Class sessions owned by a lecturer. Only the lecturer can manage their class sessions.
+     * @path /users/{lecturerId}/classSessions/{classSessionId}
+     * @allow (create) - A lecturer with UID 'lecturer123' can create a class session at /users/lecturer123/classSessions/session456.
+     * @deny (create) - A lecturer with UID 'lecturer123' cannot create a class session under another lecturer's ID /users/anotherLecturer/classSessions/session456.
+     * @allow (get) - A lecturer with UID 'lecturer123' can get their class session at /users/lecturer123/classSessions/session456.
+     * @deny (get) - A lecturer with UID 'lecturer123' cannot get a class session under another lecturer's ID /users/anotherLecturer/classSessions/session456.
+     * @allow (update) - A lecturer with UID 'lecturer123' can update their class session at /users/lecturer123/classSessions/session456.
+     * @deny (update) - A lecturer with UID 'lecturer123' cannot update a class session under another lecturer's ID /users/anotherLecturer/classSessions/session456.
+     * @allow (delete) - A lecturer with UID 'lecturer123' can delete their class session at /users/lecturer123/classSessions/session456.
+     * @deny (delete) - A lecturer with UID 'lecturer123' cannot delete a class session under another lecturer's ID /users/anotherLecturer/classSessions/session456.
+     * @allow (list) - A lecturer with UID 'lecturer123' can list their class sessions.
+     * @principle Enforces document ownership and prevents unauthorized data access.
+     */
+    match /users/{lecturerId}/classSessions/{classSessionId} {
+      allow create: if isSignedIn() && isOwner(lecturerId);
+      allow get: if isSignedIn() && isOwner(lecturerId);
+      allow update: if isSignedIn() && isExistingOwner(lecturerId);
+      allow delete: if isSignedIn() && isExistingOwner(lecturerId);
+      allow list: if isSignedIn() && isOwner(lecturerId);
+    }
+
+    /**
+     * @description Attendance records for a class session. Only the lecturer who owns the class session can manage attendance records.
+     * @path /users/{lecturerId}/classSessions/{classSessionId}/attendanceRecords/{attendanceRecordId}
+     * @allow (create) - A lecturer with UID 'lecturer123' can create an attendance record at /users/lecturer123/classSessions/session456/attendanceRecords/record789.
+     * @deny (create) - A lecturer with UID 'lecturer123' cannot create an attendance record under another lecturer's session.
+     * @allow (get) - A lecturer with UID 'lecturer123' can get their attendance record at /users/lecturer123/classSessions/session456/attendanceRecords/record789.
+     * @deny (get) - A lecturer with UID 'lecturer123' cannot get an attendance record under another lecturer's session.
+     * @allow (update) - A lecturer with UID 'lecturer123' can update their attendance record at /users/lecturer123/classSessions/session456/attendanceRecords/record789.
+     * @deny (update) - A lecturer with UID 'lecturer123' cannot update an attendance record under another lecturer's session.
+     * @allow (delete) - A lecturer with UID 'lecturer123' can delete their attendance record at /users/lecturer123/classSessions/session456/attendanceRecords/record789.
+     * @deny (delete) - A lecturer with UID 'lecturer123' cannot delete an attendance record under another lecturer's session.
+     * @allow (list) - A lecturer with UID 'lecturer123' can list attendance records for their class session.
+     * @principle Enforces document ownership and prevents unauthorized data access.
+     */
+    match /users/{lecturerId}/classSessions/{classSessionId}/attendanceRecords/{attendanceRecordId} {
+      allow create: if isSignedIn() && isOwner(lecturerId);
+      allow get: if isSignedIn() && isOwner(lecturerId);
+      allow update: if isSignedIn() && isExistingOwner(lecturerId);
+      allow delete: if isSignedIn() && isExistingOwner(lecturerId);
+      allow list: if isSignedIn() && isOwner(lecturerId);
+    }
+
+    /**
+     * @description Student profiles. Only the student can create their profile.
+     * @path /students/{studentId}
+     * @allow (create) - A student with UID 'student123' can create their profile at /students/student123 if request.auth.uid == 'student123'.
+     * @deny (create) - A student with UID 'student123' cannot create a profile at /students/anotherStudent if request.auth.uid != 'anotherStudent'.
+     * @allow (get) - A student with UID 'student123' can get their profile at /students/student123.
+     * @deny (get) - A student with UID 'student123' cannot get the profile at /students/anotherStudent.
+     * @allow (update) - A student with UID 'student123' can update their profile at /students/student123.
+     * @deny (update) - A student with UID 'student123' cannot update the profile at /students/anotherStudent.
+     * @allow (delete) - A student with UID 'student123' can delete their profile at /students/student123.
+     * @deny (delete) - A student with UID 'student123' cannot delete the profile at /students/anotherStudent.
+     * @allow (list) - Listing is disallowed.
+     * @principle Enforces document ownership and prevents unauthorized data access.
+     */
+    match /students/{studentId} {
+      allow create: if isSignedIn() && isOwner(studentId) && request.auth.uid == studentId;
+      allow get: if isSignedIn() && isOwner(studentId);
+      allow update: if isSignedIn() && isExistingOwner(studentId);
+      allow delete: if isSignedIn() && isExistingOwner(studentId);
+      allow list: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    function isExistingOwner(userId) {
+      return isOwner(userId) && resource != null;
     }
   }
 }

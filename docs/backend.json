@@ -1,51 +1,188 @@
 {
   "entities": {
-    "session": {
-      "title": "Session",
-      "description": "Represents a class session.",
+    "ClassSession": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "ClassSession",
       "type": "object",
+      "description": "Represents a class session initiated by a lecturer.",
       "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the class session."
+        },
+        "lecturerId": {
+          "type": "string",
+          "description": "Reference to the Lecturer who initiated the session. (Relationship: Lecturer 1:N ClassSession)"
+        },
         "startTime": {
           "type": "string",
-          "format": "date-time",
-          "description": "The time the session started."
-        },
-        "active": {
-          "type": "boolean",
-          "description": "Whether the session is currently active."
+          "description": "The date and time when the class session started.",
+          "format": "date-time"
         }
       },
-      "required": ["startTime", "active"]
+      "required": [
+        "id",
+        "lecturerId",
+        "startTime"
+      ]
     },
-    "student": {
-      "title": "Student",
-      "description": "Represents a student attending a session.",
+    "Lecturer": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Lecturer",
       "type": "object",
+      "description": "Represents a lecturer who can initiate class sessions.",
       "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the lecturer."
+        },
         "name": {
           "type": "string",
-          "description": "The full name of the student."
-        },
-        "joinTime": {
-          "type": "string",
-          "format": "date-time",
-          "description": "The time the student joined the session."
+          "description": "The name of the lecturer."
         }
       },
-      "required": ["name", "joinTime"]
+      "required": [
+        "id",
+        "name"
+      ]
+    },
+    "Student": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Student",
+      "type": "object",
+      "description": "Represents a student who can attend class sessions.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the student."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the student."
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ]
+    },
+    "AttendanceRecord": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "AttendanceRecord",
+      "type": "object",
+      "description": "Represents a student's attendance record for a specific class session.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the attendance record."
+        },
+        "classSessionId": {
+          "type": "string",
+          "description": "Reference to the ClassSession. (Relationship: ClassSession 1:N AttendanceRecord)"
+        },
+        "studentId": {
+          "type": "string",
+          "description": "Reference to the Student. (Relationship: Student 1:N AttendanceRecord)"
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "The date and time when the attendance was marked.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "classSessionId",
+        "studentId",
+        "timestamp"
+      ]
     }
   },
   "auth": {
-    "providers": []
+    "providers": [
+      "password",
+      "anonymous"
+    ]
   },
   "firestore": {
-    "/sessions/{sessionId}": {
-      "schema": { "$ref": "#/entities/session" },
-      "description": "Stores class session information."
-    },
-    "/sessions/{sessionId}/students/{studentId}": {
-      "schema": { "$ref": "#/entities/student" },
-      "description": "Stores students who have joined a specific session."
-    }
+    "structure": [
+      {
+        "path": "/users/{lecturerId}",
+        "definition": {
+          "entityName": "Lecturer",
+          "schema": {
+            "$ref": "#/backend/entities/Lecturer"
+          },
+          "description": "Stores lecturer profiles. This collection uses path-based ownership.",
+          "params": [
+            {
+              "name": "lecturerId",
+              "description": "The unique identifier of the lecturer (matches the Firebase Auth UID)."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{lecturerId}/classSessions/{classSessionId}",
+        "definition": {
+          "entityName": "ClassSession",
+          "schema": {
+            "$ref": "#/backend/entities/ClassSession"
+          },
+          "description": "Stores class session data initiated by a lecturer. Path-based ownership is enforced.",
+          "params": [
+            {
+              "name": "lecturerId",
+              "description": "The unique identifier of the lecturer who initiated the session."
+            },
+            {
+              "name": "classSessionId",
+              "description": "The unique identifier for the class session."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{lecturerId}/classSessions/{classSessionId}/attendanceRecords/{attendanceRecordId}",
+        "definition": {
+          "entityName": "AttendanceRecord",
+          "schema": {
+            "$ref": "#/backend/entities/AttendanceRecord"
+          },
+          "description": "Stores attendance records for a specific class session. The `lecturerId` and `classSessionId` are denormalized for authorization independence, removing the need for `get()` calls in security rules.",
+          "params": [
+            {
+              "name": "lecturerId",
+              "description": "The unique identifier of the lecturer who initiated the session."
+            },
+            {
+              "name": "classSessionId",
+              "description": "The unique identifier for the class session."
+            },
+            {
+              "name": "attendanceRecordId",
+              "description": "The unique identifier for the attendance record."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/students/{studentId}",
+        "definition": {
+          "entityName": "Student",
+          "schema": {
+            "$ref": "#/backend/entities/Student"
+          },
+          "description": "Stores student profiles. This collection uses path-based ownership.",
+          "params": [
+            {
+              "name": "studentId",
+              "description": "The unique identifier of the student (matches the Firebase Auth UID)."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore structure is designed to provide a secure and scalable solution for the ClassConnect application. It leverages path-based ownership and denormalization to ensure authorization independence, simplifying security rules and enabling atomic operations. The structure is segregated to maintain a homogeneous security posture within each collection. Since the lecturer owns the ClassSessions and AttendanceRecords, the structure uses hierarchical paths under the `/users/{userId}` collection. This approach ensures clear ownership and simplifies data retrieval and security rules.\n\nAuthorization Independence is achieved by storing AttendanceRecords as subcollections of ClassSessions owned by the lecturer. Although it means duplicating the lecturerId, this eliminates the need for `get()` calls in security rules when creating AttendanceRecords.\n\nThis design supports the required QAPs by:\n\n*   **Secure List Operations:** Segregating data into user-owned collections and subcollections enables secure `list` operations for the lecturer, ensuring that they can only access the ClassSessions and AttendanceRecords they own.\n\n*   **Atomic Operations:** Since authorization is path-based and does not rely on `get()` calls, transactions and batch operations can be performed atomically."
   }
 }
