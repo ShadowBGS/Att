@@ -18,6 +18,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { useToast } from "@/hooks/use-toast"
 import { UserPlus } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useFirestore } from "@/firebase";
+import { doc, getDoc, collection, addDoc, serverTimestamp, query, where, getDocs } from "firebase/firestore";
 
 const FormSchema = z.object({
   name: z.string().min(2, {
@@ -27,6 +29,7 @@ const FormSchema = z.object({
 
 export function StudentJoinForm({ sessionId }: { sessionId: string }) {
   const router = useRouter()
+  const firestore = useFirestore();
   const { toast } = useToast()
   const [isClient, setIsClient] = useState(false)
 
@@ -41,15 +44,14 @@ export function StudentJoinForm({ sessionId }: { sessionId: string }) {
     },
   })
 
-  function onSubmit(data: z.infer<typeof FormSchema>) {
-    if (!isClient) return
+  async function onSubmit(data: z.infer<typeof FormSchema>) {
+    if (!isClient || !firestore) return
 
     try {
-      const studentListKey = `students-${sessionId}`;
-      const studentListJSON = localStorage.getItem(studentListKey);
-      
-      // If session doesn't exist, it might have been closed by the lecturer.
-      if (studentListJSON === null) {
+      const sessionRef = doc(firestore, 'sessions', sessionId);
+      const sessionSnap = await getDoc(sessionRef);
+
+      if (!sessionSnap.exists()) {
           toast({
               title: "Error: Session not found",
               description: "The class session may have ended. Please check with your lecturer.",
@@ -58,16 +60,20 @@ export function StudentJoinForm({ sessionId }: { sessionId: string }) {
           return;
       }
 
-      const studentList: string[] = JSON.parse(studentListJSON);
-      
-      if (studentList.includes(data.name)) {
+      const studentsRef = collection(firestore, 'sessions', sessionId, 'students');
+      const q = query(studentsRef, where("name", "==", data.name));
+      const querySnapshot = await getDocs(q);
+
+      if (!querySnapshot.empty) {
         toast({
           title: "Already Registered",
           description: "Your attendance has already been marked for this session.",
         });
       } else {
-        const updatedList = [...studentList, data.name];
-        localStorage.setItem(studentListKey, JSON.stringify(updatedList));
+        await addDoc(studentsRef, {
+            name: data.name,
+            joinTime: serverTimestamp()
+        });
         localStorage.setItem('classconnect_student_name', data.name);
       }
 

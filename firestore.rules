@@ -1,0 +1,16 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /sessions/{sessionId} {
+      allow read: if true;
+      allow write: if true; // In a real app, you'd restrict this to lecturers
+      
+      match /students/{studentId} {
+        allow read: if true;
+        allow create: if true; // Allow students to add themselves
+        allow update, delete: if false; // Students cannot modify/delete attendance
+      }
+    }
+  }
+}

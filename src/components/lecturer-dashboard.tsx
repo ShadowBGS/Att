@@ -1,17 +1,28 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Users, QrCode, PlayCircle, StopCircle, UserCheck, BarChart, Clock, GraduationCap } from 'lucide-react';
+import { doc, setDoc, serverTimestamp, collection, onSnapshot, updateDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
+import { useFirestore } from '@/firebase';
+import { useToast } from '@/hooks/use-toast';
 
 const SESSION_KEY = 'classconnect_session_id';
 
+interface Student {
+  id: string;
+  name: string;
+  joinTime: Date;
+}
+
 export function LecturerDashboard() {
+  const firestore = useFirestore();
+  const { toast } = useToast();
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [students, setStudents] = useState<string[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
   const [isClient, setIsClient] = useState(false);
   const [sessionStartTime, setSessionStartTime] = useState<Date | null>(null);
@@ -21,13 +32,60 @@ export function LecturerDashboard() {
     setIsClient(true);
     const storedSessionId = localStorage.getItem(SESSION_KEY);
     if (storedSessionId) {
-      const storedStartTime = localStorage.getItem(`session_start_time_${storedSessionId}`);
       setSessionId(storedSessionId);
-      if (storedStartTime) {
-        setSessionStartTime(new Date(storedStartTime));
-      }
     }
   }, []);
+
+  useEffect(() => {
+    if (!sessionId) {
+      setSessionStartTime(null);
+      return;
+    }
+
+    if (!firestore) return;
+
+    const sessionRef = doc(firestore, 'sessions', sessionId);
+    const unsubscribeSession = onSnapshot(sessionRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.startTime) {
+          setSessionStartTime(data.startTime.toDate());
+        }
+      } else {
+        // Session was deleted, likely by endClass
+        setSessionId(null);
+        localStorage.removeItem(SESSION_KEY);
+      }
+    });
+
+    const studentsQuery = query(collection(firestore, 'sessions', sessionId, 'students'), orderBy('joinTime', 'asc'));
+    const unsubscribeStudents = onSnapshot(studentsQuery, (querySnapshot) => {
+        const studentList: Student[] = [];
+        querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            studentList.push({
+                id: doc.id,
+                name: data.name,
+                joinTime: data.joinTime?.toDate() || new Date(),
+            });
+        });
+        setStudents(studentList);
+    });
+
+    return () => {
+      unsubscribeSession();
+      unsubscribeStudents();
+    };
+  }, [sessionId, firestore]);
+  
+  useEffect(() => {
+    if (isClient && sessionId) {
+      const joinUrl = `${window.location.origin}/join/${sessionId}`;
+      setQrCodeUrl(`https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(joinUrl)}&size=256x256&bgcolor=f0f0f0`);
+    } else {
+      setQrCodeUrl('');
+    }
+  }, [sessionId, isClient]);
 
   useEffect(() => {
     if (!sessionStartTime) {
@@ -42,63 +100,51 @@ export function LecturerDashboard() {
   }, [sessionStartTime]);
 
 
-  const updateStudentList = useCallback((id: string | null) => {
-    if (!id || !isClient) {
-      setStudents([]);
+  const startClass = async () => {
+    if (!firestore) {
+      toast({
+        title: "Error",
+        description: "Could not connect to the database. Please try again.",
+        variant: "destructive"
+      });
       return;
     }
-    const studentList = localStorage.getItem(`students-${id}`);
-    if (studentList) {
-      setStudents(JSON.parse(studentList));
-    } else {
-      setStudents([]);
-    }
-  }, [isClient]);
-
-  useEffect(() => {
-    if (isClient && sessionId) {
-      const joinUrl = `${window.location.origin}/join/${sessionId}`;
-      setQrCodeUrl(`https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(joinUrl)}&size=256x256&bgcolor=f0f0f0`);
-      updateStudentList(sessionId);
-    } else {
-      setQrCodeUrl('');
-    }
-
-    const handleStorageChange = (event: StorageEvent) => {
-      if (event.key === `students-${sessionId}` && event.newValue) {
-        setStudents(JSON.parse(event.newValue));
-      }
-      if (event.key === SESSION_KEY && !event.newValue) {
-        setSessionId(null);
-        setSessionStartTime(null);
-        setStudents([]);
-      }
-    };
+    const newSessionId = doc(collection(firestore, 'sessions')).id;
+    const sessionRef = doc(firestore, 'sessions', newSessionId);
     
-    if (isClient) {
-      window.addEventListener('storage', handleStorageChange);
+    try {
+      await setDoc(sessionRef, {
+        startTime: serverTimestamp(),
+        active: true,
+      });
+      localStorage.setItem(SESSION_KEY, newSessionId);
+      setSessionId(newSessionId);
+    } catch (error) {
+      console.error("Error starting class:", error);
+      toast({
+        title: "Failed to start session",
+        description: "An unexpected error occurred. Please try again.",
+        variant: "destructive"
+      });
     }
-    return () => {
-      if (isClient) {
-        window.removeEventListener('storage', handleStorageChange);
-      }
-    };
-  }, [sessionId, isClient, updateStudentList]);
-
-  const startClass = () => {
-    const newSessionId = crypto.randomUUID();
-    const startTime = new Date();
-    localStorage.setItem(SESSION_KEY, newSessionId);
-    localStorage.setItem(`students-${newSessionId}`, JSON.stringify([]));
-    localStorage.setItem(`session_start_time_${newSessionId}`, startTime.toISOString());
-    setSessionId(newSessionId);
-    setSessionStartTime(startTime);
   };
 
-  const endClass = () => {
-    if (sessionId) {
-      localStorage.removeItem(`students-${sessionId}`);
-      localStorage.removeItem(`session_start_time_${sessionId}`);
+  const endClass = async () => {
+    if (sessionId && firestore) {
+      try {
+        const sessionRef = doc(firestore, 'sessions', sessionId);
+        // We can either mark as inactive or delete. Deleting is cleaner for this demo app.
+        await deleteDoc(sessionRef); 
+        // Note: Subcollection 'students' will be automatically deleted in Firestore over time.
+        // For immediate deletion, a cloud function would be needed.
+      } catch (error) {
+         console.error("Error ending class:", error);
+          toast({
+            title: "Failed to end session",
+            description: "An unexpected error occurred. Please try again.",
+            variant: "destructive"
+        });
+      }
     }
     localStorage.removeItem(SESSION_KEY);
     setSessionId(null);
@@ -221,10 +267,10 @@ export function LecturerDashboard() {
               <ScrollArea className="h-[60vh] pr-4">
                 {students.length > 0 ? (
                   <ul className="space-y-3">
-                    {students.map((student, index) => (
-                      <li key={index} className="flex items-center gap-4 p-3 bg-secondary rounded-lg animate-fade-in">
+                    {students.map((student) => (
+                      <li key={student.id} className="flex items-center gap-4 p-3 bg-secondary rounded-lg animate-fade-in">
                         <UserCheck className="h-6 w-6 text-accent" />
-                        <span className="text-lg text-secondary-foreground">{student}</span>
+                        <span className="text-lg text-secondary-foreground">{student.name}</span>
                       </li>
                     ))}
                   </ul>

@@ -4,6 +4,7 @@ import './globals.css';
 import { Header } from '@/components/header';
 import { Toaster } from "@/components/ui/toaster"
 import { cn } from '@/lib/utils';
+import { FirebaseClientProvider } from '@/firebase/client-provider';
 
 const ptSans = PT_Sans({
   subsets: ['latin'],
@@ -27,11 +28,13 @@ export default function RootLayout({
         "font-body antialiased min-h-screen flex flex-col bg-background text-foreground",
         ptSans.variable
       )}>
-        <Header />
-        <main className="container mx-auto p-4 sm:p-6 md:p-8 flex-grow flex flex-col">
-          {children}
-        </main>
-        <Toaster />
+        <FirebaseClientProvider>
+          <Header />
+          <main className="container mx-auto p-4 sm:p-6 md:p-8 flex-grow flex flex-col">
+            {children}
+          </main>
+          <Toaster />
+        </FirebaseClientProvider>
       </body>
     </html>
   );

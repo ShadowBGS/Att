@@ -1,0 +1,51 @@
+{
+  "entities": {
+    "session": {
+      "title": "Session",
+      "description": "Represents a class session.",
+      "type": "object",
+      "properties": {
+        "startTime": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The time the session started."
+        },
+        "active": {
+          "type": "boolean",
+          "description": "Whether the session is currently active."
+        }
+      },
+      "required": ["startTime", "active"]
+    },
+    "student": {
+      "title": "Student",
+      "description": "Represents a student attending a session.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The full name of the student."
+        },
+        "joinTime": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The time the student joined the session."
+        }
+      },
+      "required": ["name", "joinTime"]
+    }
+  },
+  "auth": {
+    "providers": []
+  },
+  "firestore": {
+    "/sessions/{sessionId}": {
+      "schema": { "$ref": "#/entities/session" },
+      "description": "Stores class session information."
+    },
+    "/sessions/{sessionId}/students/{studentId}": {
+      "schema": { "$ref": "#/entities/student" },
+      "description": "Stores students who have joined a specific session."
+    }
+  }
+}
